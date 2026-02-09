@@ -2,32 +2,69 @@ version: 0.2
 
 env:
   variables:
-    IMAGE_REPO_NAME: timesheet-dq-processing
-    IMAGE_TAG: latest
     AWS_REGION: eu-west-1
+    IMAGE_REPO: timesheet-dq-processing
+    IMAGE_TAG: latest
+    CHECKSUM_S3: s3://timesheet-artifacts-dev/dq_checksum.txt
+    IMAGE_REPO_NAME: timesheet-dq-processing
+
     JOB_NAME: bpl-manual-job
     SAGEMAKER_ROLE_ARN: "arn:aws:iam::361509912577:role/sagemaker-pipeline-smoketest-role"
 phases:
   pre_build:
     commands:
-      - ls -l
-      - echo "Logging in to Amazon ECR..."
-      - aws --version
-      - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-      - ECR_URI=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
-      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_URI
+      - echo "Checking if data_quality.py changed"
+      # Compute current checksum
+      - CURRENT_SUM=$(sha256sum data_quality.py | awk '{print $1}')
+      - echo "Current checksum: $CURRENT_SUM"
+      - |
+        if aws s3 ls $CHECKSUM_S3 >/dev/null 2>&1; then
+          PREV_SUM=$(aws s3 cp $CHECKSUM_S3 -)
+        else
+          PREV_SUM=""
+        fi
+      # Compare
+      - |
+        if [ "$CURRENT_SUM" != "$PREV_SUM" ]; then
+          echo "data_quality.py changed – Docker build required"
+          export BUILD_DOCKER=true
+        else
+          echo "data_quality.py unchanged – skipping Docker build"
+          export BUILD_DOCKER=false
+        fi  
+       #- ls -l
+       #- echo "Logging in to Amazon ECR..."
+       #- aws --version
+       #- ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+       #- ECR_URI=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+       #- aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_URI
 
   build:
     commands:
-      - echo "Building Docker image..."
-      - docker build -t $IMAGE_REPO_NAME:$IMAGE_TAG .
-      - docker tag $IMAGE_REPO_NAME:$IMAGE_TAG $ECR_URI/$IMAGE_REPO_NAME:$IMAGE_TAG
+      - |
+        if [ "$BUILD_DOCKER" = "true" ]; then
+          echo "Building Docker image"
+          docker build -t $IMAGE_REPO:$IMAGE_TAG .
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          ECR_URI=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_URI
+
+          docker tag $IMAGE_REPO:$IMAGE_TAG $ECR_URI/$IMAGE_REPO:$IMAGE_TAG
+          docker push $ECR_URI/$IMAGE_REPO:$IMAGE_TAG
+          echo $CURRENT_SUM | aws s3 cp - $CHECKSUM_S3
+
+        else
+          echo "Docker build skipped"
+        fi  
+        #- echo "Building Docker image..."
+        #- docker build -t $IMAGE_REPO_NAME:$IMAGE_TAG .
+        #- docker tag $IMAGE_REPO_NAME:$IMAGE_TAG $ECR_URI/$IMAGE_REPO_NAME:$IMAGE_TAG
 
   post_build:
     commands:
-      - echo "Pushing Docker image to ECR..."
-      - docker push $ECR_URI/$IMAGE_REPO_NAME:$IMAGE_TAG
-      - echo "Docker image pushed successfully"
+      #- echo "Pushing Docker image to ECR..."
+      #- docker push $ECR_URI/$IMAGE_REPO_NAME:$IMAGE_TAG
+      #- echo "Docker image pushed successfully"
 
       # OPTIONAL: trigger SageMaker Pipeline
       - echo "Starting SageMaker Pipeline execution"
