@@ -23,11 +23,6 @@ resource "aws_codepipeline" "pipeline" {
         FullRepositoryId = "gitbidyut/timesheet-dq-bpl-updated" # e.g., "myuser/my-repo"
         BranchName       = "main"
 
-        # 🔑 IMPORTANT
-        FilePaths = jsonencode([
-           "data_quality.py",
-            "Dockerfile"
-         ])
       }
     }
   }
