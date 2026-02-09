@@ -3,7 +3,7 @@ version: 0.2
 env:
   variables:
     AWS_REGION: eu-west-1
-    IMAGE_REPO: timesheet-dq-processing
+    #IMAGE_REPO: timesheet-dq-processing
     IMAGE_TAG: latest
     CHECKSUM_S3: s3://timesheet-artifacts-dev/dq_checksum.txt
     IMAGE_REPO_NAME: timesheet-dq-processing
@@ -14,23 +14,25 @@ phases:
   pre_build:
     commands:
       - echo "Checking if data_quality.py changed"
-      # Compute current checksum
-      - CURRENT_SUM=$(sha256sum data_quality.py | awk '{print $1}')
-      - echo "Current checksum: $CURRENT_SUM"
       - |
+        # Compute current checksum
+        set -e 
+        CURRENT_SUM=$(sha256sum data_quality.py | awk '{print $1}')
+        echo "Current checksum: $CURRENT_SUM"
+      
         if aws s3 ls $CHECKSUM_S3 >/dev/null 2>&1; then
           PREV_SUM=$(aws s3 cp $CHECKSUM_S3 -)
         else
           PREV_SUM=""
         fi
-      # Compare
-      - |
+      
+        # Compare
         if [ "$CURRENT_SUM" != "$PREV_SUM" ]; then
           echo "data_quality.py changed – Docker build required"
-          export BUILD_DOCKER=true
+          export BUILD_DOCKER=true >> $CODEBUILD_ENV_FILE
         else
           echo "data_quality.py unchanged – skipping Docker build"
-          export BUILD_DOCKER=false
+          export BUILD_DOCKER=false  >> $CODEBUILD_ENV_FILE
         fi  
        #- ls -l
        #- echo "Logging in to Amazon ECR..."
@@ -42,6 +44,7 @@ phases:
   build:
     commands:
       - |
+        set -e
         if [ "$BUILD_DOCKER" = "true" ]; then
           echo "Building Docker image"
           docker build -t $IMAGE_REPO:$IMAGE_TAG .
