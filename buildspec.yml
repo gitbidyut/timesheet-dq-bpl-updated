@@ -1,0 +1,65 @@
+version: 0.2
+
+env:
+  variables:
+    IMAGE_REPO_NAME: timesheet-dq-processing
+    IMAGE_TAG: latest
+    AWS_REGION: eu-west-1
+    JOB_NAME: bpl-manual-job
+    SAGEMAKER_ROLE_ARN: "arn:aws:iam::361509912577:role/sagemaker-pipeline-smoketest-role"
+phases:
+  pre_build:
+    commands:
+      - ls -l
+      - echo "Logging in to Amazon ECR..."
+      - aws --version
+      - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      - ECR_URI=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_URI
+
+  build:
+    commands:
+      - echo "Building Docker image..."
+      - docker build -t $IMAGE_REPO_NAME:$IMAGE_TAG .
+      - docker tag $IMAGE_REPO_NAME:$IMAGE_TAG $ECR_URI/$IMAGE_REPO_NAME:$IMAGE_TAG
+
+  post_build:
+    commands:
+      - echo "Pushing Docker image to ECR..."
+      - docker push $ECR_URI/$IMAGE_REPO_NAME:$IMAGE_TAG
+      - echo "Docker image pushed successfully"
+
+      # OPTIONAL: trigger SageMaker Pipeline
+      - echo "Starting SageMaker Pipeline execution"
+      - | 
+          aws sagemaker create-processing-job --region $AWS_REGION --processing-job-name $JOB_NAME \
+            --role-arn $SAGEMAKER_ROLE_ARN --app-specification "{
+             \"ImageUri\": \"361509912577.dkr.ecr.eu-west-1.amazonaws.com/timesheet-dq-processing:latest\",
+             \"ContainerEntrypoint\": [\"python3\", \"/opt/ml/processing/code/data_quality.py\" ] }" \
+           --processing-resources "{ \"ClusterConfig\": { \"InstanceType\": \"ml.t3.medium\", \"InstanceCount\": 1,
+               \"VolumeSizeInGB\": 30 }}" \
+           --processing-inputs "[ {
+                    \"InputName\": \"input-data\",
+                     \"S3Input\": {
+                         \"S3Uri\": \"s3://bpl-timesheet-raw-dev/input/\",
+                         \"LocalPath\": \"/opt/ml/processing/input\",
+                         \"S3InputMode\": \"File\",                         
+                          \"S3DataType\": \"S3Prefix\"  } }  ]" \
+             --processing-output-config "{
+                  \"Outputs\": [{
+                   \"OutputName\": \"dq-output\",
+                   \"S3Output\": {
+                   \"S3Uri\": \"s3://bpl-timesheet-results-dev/output/\",
+                  \"LocalPath\": \"/opt/ml/processing/output\",
+                   \"S3UploadMode\": \"EndOfJob\"
+                }
+               }
+              ]
+             }"
+
+
+      #- aws sagemaker start-pipeline-execution --pipeline-name timesheet-edfx-dev --region $AWS_REGION
+
+artifacts:
+  files:
+    - '**/*'
