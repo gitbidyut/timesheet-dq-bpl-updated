@@ -3,11 +3,10 @@ version: 0.2
 env:
   variables:
     AWS_REGION: eu-west-1
-    #IMAGE_REPO: timesheet-dq-processing
     IMAGE_TAG: latest
     CHECKSUM_S3: s3://bpl-timesheet-artifacts-dev/dq_checksum.txt
     IMAGE_REPO_NAME: timesheet-dq-processing
-
+    SNS_TOPIC_ARN: arn:aws:sns:eu-west-1:361509912577:timesheet-dq-results
     SAGEMAKER_ROLE_ARN: "arn:aws:iam::361509912577:role/sagemaker-pipeline-smoketest-role"
 phases:
   pre_build:
@@ -88,9 +87,21 @@ phases:
                }
               ]
              }"
+      
+        echo "Waiting for job to complete..."
+        aws sagemaker wait processing-job-completed --processing-job-name $JOB_NAME --region $AWS_REGION
 
+        echo "Job completed, fetching results"
+        
+        aws s3 cp "$OUTPUT_S3/$JOB_NAME/dq-output/result.json" result.json
 
-      #- aws sagemaker start-pipeline-execution --pipeline-name timesheet-edfx-dev --region $AWS_REGION
+        echo "Publishing SNS notification"
+
+        aws sns publish \
+          --region $AWS_REGION \
+          --topic-arn $SNS_TOPIC_ARN \
+          --subject "Timesheet Data Quality Result: $JOB_NAME" \
+          --message "$(cat result.json)"    
 
 artifacts:
   files:

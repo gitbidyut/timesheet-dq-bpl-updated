@@ -31,7 +31,8 @@ resource "aws_iam_role_policy" "codebuild_policy" {
 				  "ecr:UploadLayerPart",
 				  "ecr:CompleteLayerUpload",
 				  "ecr:PutImage",
-          "iam:PassRole"         
+          "iam:PassRole", 
+          "sns:Publish"      
           ]
       Resource = "*"
     }]
