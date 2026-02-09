@@ -8,7 +8,6 @@ env:
     CHECKSUM_S3: s3://bpl-timesheet-artifacts-dev/dq_checksum.txt
     IMAGE_REPO_NAME: timesheet-dq-processing
 
-    JOB_NAME: bpl-manual-job-$(date +%Y-%m-%d-%H-%M)
     SAGEMAKER_ROLE_ARN: "arn:aws:iam::361509912577:role/sagemaker-pipeline-smoketest-role"
 phases:
   pre_build:
@@ -60,7 +59,12 @@ phases:
       # OPTIONAL: trigger SageMaker Pipeline
       - echo "Starting SageMaker Pipeline execution"
       - | 
-          aws sagemaker create-processing-job --region $AWS_REGION --processing-job-name $JOB_NAME \
+        set -e
+        TIMESTAMP=$(date -u +"%Y%m%d-%H%M%S")
+        JOB_NAME="timesheet-dq-${TIMESTAMP}"
+
+        echo "Creating Processing Job: $JOB_NAME"
+        aws sagemaker create-processing-job --region $AWS_REGION --processing-job-name $JOB_NAME \
             --role-arn $SAGEMAKER_ROLE_ARN --app-specification "{
              \"ImageUri\": \"361509912577.dkr.ecr.eu-west-1.amazonaws.com/timesheet-dq-processing:latest\",
              \"ContainerEntrypoint\": [\"python3\", \"/opt/ml/processing/code/data_quality.py\" ] }" \
