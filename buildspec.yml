@@ -5,7 +5,7 @@ env:
     AWS_REGION: eu-west-1
     #IMAGE_REPO: timesheet-dq-processing
     IMAGE_TAG: latest
-    CHECKSUM_S3: s3://timesheet-artifacts-dev/dq_checksum.txt
+    CHECKSUM_S3: s3://bpl-timesheet-artifacts-dev/dq_checksum.txt
     IMAGE_REPO_NAME: timesheet-dq-processing
 
     JOB_NAME: bpl-manual-job
