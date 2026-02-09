@@ -28,11 +28,11 @@ phases:
       
         # Compare
         if [ "$CURRENT_SUM" != "$PREV_SUM" ]; then
-          echo "data_quality.py changed – Docker build required"
-          export BUILD_DOCKER=true >> $CODEBUILD_ENV_FILE
+          echo "data_quality.py changed - Docker build required"
+          export BUILD_DOCKER=true 
         else
-          echo "data_quality.py unchanged – skipping Docker build"
-          export BUILD_DOCKER=false  >> $CODEBUILD_ENV_FILE
+          echo "data_quality.py unchanged  - skipping Docker build"
+          export BUILD_DOCKER=false 
         fi  
        #- ls -l
        #- echo "Logging in to Amazon ECR..."
