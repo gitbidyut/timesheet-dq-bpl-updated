@@ -52,8 +52,8 @@ phases:
           ECR_URI=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
           aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_URI
 
-          docker tag $IMAGE_REPO:$IMAGE_TAG $ECR_URI/$IMAGE_REPO:$IMAGE_TAG
-          docker push $ECR_URI/$IMAGE_REPO:$IMAGE_TAG
+          docker tag $IMAGE_REPO_NAME:$IMAGE_TAG $ECR_URI/$IMAGE_REPO_NAME:$IMAGE_TAG
+          docker push $ECR_URI/$IMAGE_REPO_NAME:$IMAGE_TAG
           echo $CURRENT_SUM | aws s3 cp - $CHECKSUM_S3
 
         else
