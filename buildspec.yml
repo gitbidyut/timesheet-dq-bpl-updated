@@ -8,7 +8,7 @@ env:
     CHECKSUM_S3: s3://bpl-timesheet-artifacts-dev/dq_checksum.txt
     IMAGE_REPO_NAME: timesheet-dq-processing
 
-    JOB_NAME: bpl-manual-job321
+    JOB_NAME: bpl-manual-job-$(date +%Y-%m-%d-%H-%M)
     SAGEMAKER_ROLE_ARN: "arn:aws:iam::361509912577:role/sagemaker-pipeline-smoketest-role"
 phases:
   pre_build:

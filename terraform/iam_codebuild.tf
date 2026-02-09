@@ -19,7 +19,8 @@ resource "aws_iam_role_policy" "codebuild_policy" {
     Statement = [{
       Effect = "Allow"
       Action = [
-         "sagemaker:StartPipelineExecution",
+          "sagemaker:StartPipelineExecution",
+          "sagemaker:CreateProcessingJob",
           "logs:*",
           "s3:*",
           "ecr:GetAuthorizationToken",
