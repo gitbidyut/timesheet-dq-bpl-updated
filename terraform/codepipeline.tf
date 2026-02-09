@@ -20,7 +20,7 @@ resource "aws_codepipeline" "pipeline" {
 
       configuration = {
         ConnectionArn    = "arn:aws:codeconnections:eu-west-1:361509912577:connection/9c948075-73f7-4c60-8d1a-2539faa9ba9f"
-        FullRepositoryId = "gitbidyut/timesheet-dq-bpl" # e.g., "myuser/my-repo"
+        FullRepositoryId = "gitbidyut/timesheet-dq-bpl-updated" # e.g., "myuser/my-repo"
         BranchName       = "main"
 
         # 🔑 IMPORTANT
