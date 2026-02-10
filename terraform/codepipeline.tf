@@ -69,8 +69,8 @@ resource "aws_cloudwatch_event_rule" "timesheet_result" {
 
 resource "aws_cloudwatch_event_target" "trigger_pipeline" {
   rule      = aws_cloudwatch_event_rule.timesheet_result.name
-  target_id = "CodePipelineTarget"
-  arn       = aws_codepipeline.pipeline.arn
+  target_id = "SendDQResultSNS"
+  arn       = aws_sns_topic.dq_results.id
   role_arn = aws_iam_role.eventbridge_role.arn
 }
 
