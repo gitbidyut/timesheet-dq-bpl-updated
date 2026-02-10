@@ -46,8 +46,8 @@ resource "aws_codepipeline" "pipeline" {
 }
 
 resource "aws_cloudwatch_event_rule" "timesheet_result" {
-  name        = "trigger-codepipeline-on-timesheet-result"
-  description = "Trigger CodePipeline when new timesheet file checked and a result saved"
+  name        = "trigger-sns-on-timesheet-result"
+  description = "Trigger SNS when DQ result is uploaded to S3"
 
   event_pattern = jsonencode({
     source = ["aws.s3"],
@@ -75,7 +75,7 @@ resource "aws_cloudwatch_event_target" "trigger_pipeline" {
 }
 
 resource "aws_iam_role" "eventbridge_role" {
-  name = "eventbridge-start-codepipeline-role"
+  name = "eventbridge-sns-publish-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -96,8 +96,8 @@ resource "aws_iam_role_policy" "eventbridge_policy" {
     Version = "2012-10-17"
     Statement = [{
       Effect = "Allow"
-      Action = "codepipeline:StartPipelineExecution"
-      Resource = aws_codepipeline.pipeline.arn
+      Action = "sns:Publish"
+      Resource =aws_sns_topic.dq_results.arn
     }]
   })
 }
