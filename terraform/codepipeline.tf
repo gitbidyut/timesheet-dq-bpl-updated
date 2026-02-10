@@ -45,9 +45,30 @@ resource "aws_codepipeline" "pipeline" {
   }
 }
 
+resource "aws_cloudwatch_event_rule" "timesheet_result" {
+  name        = "trigger-codepipeline-on-timesheet-result"
+  description = "Trigger CodePipeline when new timesheet file checked and a result saved"
+
+  event_pattern = jsonencode({
+    source = ["aws.s3"],
+    detail-type = ["Object Created"],
+    detail = {
+      bucket = {
+        name = ["bpl-timesheet-results-dev"]
+      },
+      object = {
+        key = [{
+          prefix = "ouput/"
+        }]
+      }
+    }
+  })
+}
+
+
 
 resource "aws_cloudwatch_event_target" "trigger_pipeline" {
-  rule      = aws_cloudwatch_event_rule.result.name
+  rule      = aws_cloudwatch_event_rule.timesheet_result.name
   target_id = "CodePipelineTarget"
   arn       = aws_codepipeline.pipeline.arn
   role_arn = aws_iam_role.eventbridge_role.arn
