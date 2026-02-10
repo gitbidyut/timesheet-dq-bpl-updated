@@ -58,7 +58,7 @@ resource "aws_cloudwatch_event_rule" "timesheet_result" {
       },
       object = {
         key = [{
-          prefix = "ouput/"
+          prefix = "output/"
         }]
       }
     }
