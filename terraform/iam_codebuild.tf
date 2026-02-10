@@ -21,6 +21,7 @@ resource "aws_iam_role_policy" "codebuild_policy" {
       Action = [
           "sagemaker:StartPipelineExecution",
           "sagemaker:CreateProcessingJob",
+          "sagemaker:DescribeProcessingJob",
           "logs:*",
           "s3:*",
           "ecr:GetAuthorizationToken",

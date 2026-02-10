@@ -16,3 +16,5 @@ resource "aws_s3_object" "my_directory" {
   key    = "input/" # The trailing slash indicates a directory
   # No source or content is needed for an empty directory.
 }
+
+

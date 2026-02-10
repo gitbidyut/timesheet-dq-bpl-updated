@@ -5,5 +5,5 @@ resource "aws_sns_topic" "dq_results" {
 resource "aws_sns_topic_subscription" "email" {
   topic_arn = aws_sns_topic.dq_results.arn
   protocol  = "email"
-  endpoint  = "pal.bidyut@gmail.com"
+  endpoint  = "bidyut.pal@edifixio.com"
 }

@@ -44,3 +44,41 @@ resource "aws_codepipeline" "pipeline" {
     }
   }
 }
+
+
+resource "aws_cloudwatch_event_target" "trigger_pipeline" {
+  rule      = aws_cloudwatch_event_rule.result.name
+  target_id = "CodePipelineTarget"
+  arn       = aws_codepipeline.pipeline.arn
+  role_arn = aws_iam_role.eventbridge_role.arn
+}
+
+resource "aws_iam_role" "eventbridge_role" {
+  name = "eventbridge-start-codepipeline-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "events.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "eventbridge_policy" {
+  role = aws_iam_role.eventbridge_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = "codepipeline:StartPipelineExecution"
+      Resource = aws_codepipeline.pipeline.arn
+    }]
+  })
+}
+
+
