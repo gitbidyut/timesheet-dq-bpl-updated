@@ -104,7 +104,7 @@ for col in string_columns:
     if col in df.columns:
         bad_spaces = df[col].astype(str).str.match(r"^\s+|\s+$").any()
         if bad_spaces:
-            errors.append(f"Leading/trailing spaces detected in column: {col}")
+            errors.append(f"📂Leading/trailing spaces detected in column: {col}")
 
 # ==============================
 # Step 6: Business rule checks
@@ -113,7 +113,7 @@ if (df["Hours"] < 0).any():
     errors.append("Negative hours detected")
 
 if (df["Hours"] > 24).any():
-    errors.append("Hours greater than 24 detected")
+    errors.append("📂Hours greater than 24 detected:{df['Hours']}")
 
 # ==============================
 # Step 7: Final decision
