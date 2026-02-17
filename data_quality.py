@@ -106,17 +106,23 @@ if not invalid_hours.empty:
 # 2️⃣ Daily Hours > 24 Rule
 # ----------------------------------------------------
 
-daily_hours = df.groupby(["EmployeeNr", "Date"])["Hours"].sum().reset_index()
+daily_hours = (
+    df.groupby(["EmployeeNr", "Date"])["Hours"]
+      .sum()
+      .reset_index()
+      .rename(columns={"Hours": "TotalDailyHours"})
+)
 
-overbooked = daily_hours[daily_hours["Hours"] > 24]
+overbooked = daily_hours[daily_hours["TotalDailyHours"] > 24]
 
 if not overbooked.empty:
     merged = df.merge(overbooked, on=["EmployeeNr", "Date"])
+
     failures.append(
         build_issue(
             "Daily Hours Exceed 24",
             merged,
-            ["Employee", "EmployeeNr", "Date", "Hours"]
+            ["Employee", "EmployeeNr", "Date", "TotalDailyHours"]
         )
     )
 
