@@ -181,3 +181,4 @@ status = "FAILED" if failures else ("WARN" if warnings else "PASSED")
 
 result = {
     "status": status
+}
