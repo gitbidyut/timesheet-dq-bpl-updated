@@ -133,7 +133,7 @@ VALID_ACTIVITY_CODES = {
 
 invalid_activity_df = df[~df["ActivityCode"].isin(VALID_ACTIVITY_CODES)]
 
-if invalid_activity_df.mean().size > 0:
+if if not invalid_activity_df.empty:
     invalid_ratio = len(invalid_activity_df) / len(df)
     if invalid_ratio > 0.01:
         fail(f"{invalid_ratio:.1%} rows have invalid ActivityCode")
