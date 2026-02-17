@@ -10,45 +10,36 @@ RESULT_FILE = os.path.join(OUTPUT_PATH, "dq_result.json")
 
 failures = []
 warnings = []
-affected_employee_set = set()
 
 
 # ----------------------------------------------------
-# Helper Functions
+# Helper to format validation output
 # ----------------------------------------------------
 
-def fail(message):
-    print(f"[FAIL] {message}")
-    failures.append(message)
+def build_issue(rule_name, df_subset, columns):
+    records = (
+        df_subset[columns]
+        .head(20)  # limit to avoid huge JSON
+        .to_dict(orient="records")
+    )
 
-
-def warn(message):
-    print(f"[WARN] {message}")
-    warnings.append(message)
-
-
-def collect_affected_employees(sub_df):
-    if "Employee" in sub_df.columns and "EmployeeNr" in sub_df.columns:
-        pairs = sub_df[["Employee", "EmployeeNr"]].drop_duplicates()
-        for _, row in pairs.iterrows():
-            affected_employee_set.add(
-                (str(row["Employee"]), str(row["EmployeeNr"]))
-            )
+    return {
+        "rule": rule_name,
+        "count": len(df_subset),
+        "details": records
+    }
 
 
 # ----------------------------------------------------
-# Load Input File
+# Load Data
 # ----------------------------------------------------
 
 try:
     files = [f for f in os.listdir(INPUT_PATH) if f.endswith(".csv")]
     if not files:
-        raise ValueError("No CSV file found in input directory")
+        raise ValueError("No CSV file found")
 
-    input_file = os.path.join(INPUT_PATH, files[0])
-    print(f"Reading input file: {input_file}")
-
-    df = pd.read_csv(input_file)
+    df = pd.read_csv(os.path.join(INPUT_PATH, files[0]))
 
 except Exception as e:
     print("Error reading input:", str(e))
@@ -56,7 +47,7 @@ except Exception as e:
 
 
 # ----------------------------------------------------
-# 1. Schema Validation
+# Required Columns
 # ----------------------------------------------------
 
 REQUIRED_COLUMNS = [
@@ -69,10 +60,15 @@ REQUIRED_COLUMNS = [
 ]
 
 missing_cols = [c for c in REQUIRED_COLUMNS if c not in df.columns]
+
 if missing_cols:
-    fail(f"Missing required columns: {missing_cols}")
+    failures.append({
+        "rule": "Missing Columns",
+        "details": missing_cols
+    })
+    status = "FAILED"
     result = {
-        "status": "FAILED",
+        "status": status,
         "failures": failures,
         "warnings": warnings
     }
@@ -83,132 +79,105 @@ if missing_cols:
 
 
 # ----------------------------------------------------
-# 2. Null / Empty Checks
-# ----------------------------------------------------
-
-NULL_THRESHOLD = 0.05  # 5%
-
-for col in REQUIRED_COLUMNS:
-    null_ratio = df[col].isna().mean()
-    if null_ratio > NULL_THRESHOLD:
-        fail(f"{col} has {null_ratio:.1%} null values")
-
-
-# ----------------------------------------------------
-# 3. Hours Validation
+# Convert Types
 # ----------------------------------------------------
 
 df["Hours"] = pd.to_numeric(df["Hours"], errors="coerce")
-
-invalid_hours_df = df[(df["Hours"] <= 0) | (df["Hours"] > 24) | df["Hours"].isna()]
-
-if not invalid_hours_df.empty:
-    fail(f"{len(invalid_hours_df)} rows have invalid Hours (<=0 or >24)")
-    collect_affected_employees(invalid_hours_df)
-
-
-# ----------------------------------------------------
-# 4. Daily Hours > 24 per Employee
-# ----------------------------------------------------
-
 df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
 
-daily_hours = df.groupby(["EmployeeNr", "Date"])["Hours"].sum()
 
-overbooked = daily_hours[daily_hours > 24]
+# ----------------------------------------------------
+# 1️⃣ Invalid Hours Rule
+# ----------------------------------------------------
 
-if not overbooked.empty:
-    fail(f"{len(overbooked)} employee-days exceed 24 hours")
-    overbooked_df = df[df.set_index(["EmployeeNr", "Date"]).index.isin(overbooked.index)]
-    collect_affected_employees(overbooked_df)
+invalid_hours = df[(df["Hours"] <= 0) | (df["Hours"] > 24) | df["Hours"].isna()]
+
+if not invalid_hours.empty:
+    failures.append(
+        build_issue(
+            "Invalid Hours (<=0, >24, or null)",
+            invalid_hours,
+            ["Employee", "EmployeeNr", "Date", "Hours"]
+        )
+    )
 
 
 # ----------------------------------------------------
-# 5. Activity Code Validation
+# 2️⃣ Daily Hours > 24 Rule
+# ----------------------------------------------------
+
+daily_hours = df.groupby(["EmployeeNr", "Date"])["Hours"].sum().reset_index()
+
+overbooked = daily_hours[daily_hours["Hours"] > 24]
+
+if not overbooked.empty:
+    merged = df.merge(overbooked, on=["EmployeeNr", "Date"])
+    failures.append(
+        build_issue(
+            "Daily Hours Exceed 24",
+            merged,
+            ["Employee", "EmployeeNr", "Date", "Hours"]
+        )
+    )
+
+
+# ----------------------------------------------------
+# 3️⃣ Invalid Activity Code
 # ----------------------------------------------------
 
 VALID_ACTIVITY_CODES = {
     "DEV", "TEST", "MEETING", "TRAINING", "SUPPORT"
 }
 
-invalid_activity_df = df[~df["ActivityCode"].isin(VALID_ACTIVITY_CODES)]
+invalid_activity = df[~df["ActivityCode"].isin(VALID_ACTIVITY_CODES)]
 
-if not invalid_activity_df.empty:
-    invalid_ratio = len(invalid_activity_df) / len(df)
-    if invalid_ratio > 0.01:
-        fail(f"{invalid_ratio:.1%} rows have invalid ActivityCode")
-        collect_affected_employees(invalid_activity_df)
-
-
-# ----------------------------------------------------
-# 6. Future Date Check
-# ----------------------------------------------------
-
-future_df = df[df["Date"] > pd.Timestamp.today()]
-
-if not future_df.empty:
-    fail(f"{len(future_df)} rows contain future dates")
-    collect_affected_employees(future_df)
+if not invalid_activity.empty:
+    failures.append(
+        build_issue(
+            "Invalid ActivityCode",
+            invalid_activity,
+            ["Employee", "EmployeeNr", "ActivityCode"]
+        )
+    )
 
 
 # ----------------------------------------------------
-# 7. Whitespace Check (Description)
+# 4️⃣ Future Date Rule
+# ----------------------------------------------------
+
+future_dates = df[df["Date"] > pd.Timestamp.today()]
+
+if not future_dates.empty:
+    failures.append(
+        build_issue(
+            "Future Date Detected",
+            future_dates,
+            ["Employee", "EmployeeNr", "Date"]
+        )
+    )
+
+
+# ----------------------------------------------------
+# 5️⃣ Whitespace Warning
 # ----------------------------------------------------
 
 if "Description" in df.columns:
-    space_ratio = df["Description"].astype(str).str.match(r"^\s+|\s+$").mean()
-    if space_ratio > 0.02:
-        warn(f"Description has leading/trailing spaces in {space_ratio:.1%} of rows")
-
-
-# ----------------------------------------------------
-# 8. Duplicate Entries
-# ----------------------------------------------------
-
-dup_count = df.duplicated(
-    subset=["EmployeeNr", "Date", "ProjectCode"]
-).sum()
-
-if dup_count > 0:
-    warn(f"{dup_count} duplicate timesheet entries detected")
+    space_rows = df[df["Description"].astype(str).str.match(r"^\s+|\s+$")]
+    if not space_rows.empty:
+        warnings.append(
+            build_issue(
+                "Leading/Trailing Spaces in Description",
+                space_rows,
+                ["Employee", "EmployeeNr", "Description"]
+            )
+        )
 
 
 # ----------------------------------------------------
 # Prepare Output
 # ----------------------------------------------------
 
-unique_employees = df["EmployeeNr"].nunique()
-
-affected_employees = [
-    {"Employee": emp, "EmployeeNr": empnr}
-    for emp, empnr in affected_employee_set
-]
-
 status = "FAILED" if failures else ("WARN" if warnings else "PASSED")
 
 result = {
-    "status": status,
-    "row_count": len(df),
-    "unique_employees": unique_employees,
-    "affected_employee_count": len(affected_employees),
-    "affected_employees": affected_employees,
-    "failures": failures,
-    "warnings": warnings,
-    "timestamp": datetime.utcnow().isoformat()
-}
-
-os.makedirs(OUTPUT_PATH, exist_ok=True)
-
-with open(RESULT_FILE, "w") as f:
-    json.dump(result, f, indent=2)
-
-print("DQ result written to:", RESULT_FILE)
-
-# ----------------------------------------------------
-# Exit Code (important for pipeline control)
-# ----------------------------------------------------
-
-if failures:
-    sys.exit(1)
-else:
-    sys.exit(0)
+    "status": status
