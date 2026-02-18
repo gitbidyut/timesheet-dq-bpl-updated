@@ -13,35 +13,37 @@ warnings = []
 
 
 # --------------------------------------------------
-# Helper: Safe issue builder
+# Helper: Build validation issue safely
 # --------------------------------------------------
 def build_issue(rule_name, df_subset, columns):
     valid_columns = [c for c in columns if c in df_subset.columns]
 
-    records = (
-        df_subset[valid_columns]
-        .head(20)  # limit large outputs
-        .to_dict(orient="records")
-    )
+    records = df_subset[valid_columns].head(20).copy()
+
+    # Convert to JSON-safe values
+    for col in records.columns:
+        if pd.api.types.is_datetime64_any_dtype(records[col]):
+            records[col] = records[col].astype(str)
+        elif pd.api.types.is_numeric_dtype(records[col]):
+            records[col] = records[col].astype(float)
+        else:
+            records[col] = records[col].astype(str)
 
     return {
         "rule": rule_name,
         "count": len(df_subset),
-        "details": records
+        "details": records.to_dict(orient="records")
     }
 
 
 # --------------------------------------------------
-# MAIN LOGIC (wrapped safely)
+# Main Execution Block (Safe Wrapper)
 # --------------------------------------------------
 try:
     print("=== Data Quality Script Started ===")
 
-    # --------------------------------------------------
-    # Load input file
-    # --------------------------------------------------
     files = [f for f in os.listdir(INPUT_PATH) if f.endswith(".csv")]
-    print("Files found:", files)
+    print("Input files found:", files)
 
     if not files:
         raise ValueError("No CSV file found in input directory")
@@ -81,7 +83,7 @@ try:
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
 
     # --------------------------------------------------
-    # 1️⃣ Invalid Hours Rule
+    # 1️⃣ Invalid Hours
     # --------------------------------------------------
     invalid_hours = df[
         (df["Hours"] <= 0) |
@@ -99,7 +101,7 @@ try:
         )
 
     # --------------------------------------------------
-    # 2️⃣ Daily Hours > 24 Rule
+    # 2️⃣ Daily Hours > 24
     # --------------------------------------------------
     daily_hours = (
         df.groupby(["EmployeeNr", "Date"])["Hours"]
@@ -139,7 +141,7 @@ try:
         )
 
     # --------------------------------------------------
-    # 4️⃣ Future Date Rule
+    # 4️⃣ Future Date
     # --------------------------------------------------
     future_dates = df[df["Date"] > pd.Timestamp.today()]
 
@@ -153,7 +155,7 @@ try:
         )
 
     # --------------------------------------------------
-    # 5️⃣ Excessive Null Check (5%)
+    # 5️⃣ Excessive Null Check (>5%)
     # --------------------------------------------------
     NULL_THRESHOLD = 0.05
 
@@ -161,7 +163,7 @@ try:
         null_ratio = df[col].isna().mean()
         if null_ratio > NULL_THRESHOLD:
             failures.append({
-                "rule": f"{col} has excessive nulls",
+                "rule": f"{col} has excessive null values",
                 "ratio": f"{null_ratio:.1%}"
             })
 
@@ -185,6 +187,7 @@ try:
         space_rows = df[
             df["Description"].astype(str).str.match(r"^\s+|\s+$")
         ]
+
         if not space_rows.empty:
             warnings.append(
                 build_issue(
@@ -195,7 +198,7 @@ try:
             )
 
 except Exception as e:
-    print("Unexpected error:", str(e))
+    print("Unexpected error occurred:", str(e))
     failures.append({
         "rule": "Unexpected Error",
         "details": str(e)
@@ -205,7 +208,6 @@ except Exception as e:
 # --------------------------------------------------
 # ALWAYS WRITE OUTPUT
 # --------------------------------------------------
-
 status = "FAILED" if failures else ("WARN" if warnings else "PASSED")
 
 result = {
@@ -220,12 +222,12 @@ result = {
 os.makedirs(OUTPUT_PATH, exist_ok=True)
 
 with open(RESULT_FILE, "w") as f:
-    json.dump(result, f, indent=2)
+    json.dump(result, f, indent=2, default=str)  # default=str fixes Timestamp issue
 
 print("DQ result written to:", RESULT_FILE)
 print("Final Status:", status)
 
-# Proper exit control
+# Proper exit control for SageMaker
 if status == "FAILED":
     sys.exit(1)
 else:
